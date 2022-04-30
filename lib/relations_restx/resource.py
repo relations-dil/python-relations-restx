@@ -171,7 +171,7 @@ class Resource(flask_restx.Resource, ResourceIdentity):
     Base Model class for Relations Restful classes
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs): # pylint: disable=super-init-not-called
 
         # Know thyself
 
