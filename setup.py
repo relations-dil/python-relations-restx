@@ -2,8 +2,8 @@
 
 from setuptools import setup, find_packages
 setup(
-    name="python-relations-restful",
-    version="0.1.0",
+    name="python-relations-restx",
+    version="0.2.0",
     package_dir = {'': 'lib'},
     py_modules = [
         'relations_restx',
