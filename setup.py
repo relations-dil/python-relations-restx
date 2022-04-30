@@ -3,16 +3,13 @@
 from setuptools import setup, find_packages
 setup(
     name="python-relations-restx",
-    version="0.2.0",
+    version="0.3.0",
     package_dir = {'': 'lib'},
     py_modules = [
         'relations_restx',
-        'relations_restx.resource',
-        'relations_restx.source',
-        'relations_restx.unittest'
+        'relations_restx.resource'
     ],
     install_requires=[
-        'requests==2.25.1',
         'flask==2.1.1',
         'flask-restx==0.5.1'
     ]

@@ -1,5 +1,5 @@
 """
-Resource module for Relations and Flask RESTful
+Resource module for Relations and Flask RestX
 """
 
 # pylint: disable=not-callable

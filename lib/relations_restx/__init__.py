@@ -1,5 +1,5 @@
 """
-Utilities for Relations RESTful
+Utilities for Relations RestX
 """
 
 import inspect
@@ -7,7 +7,6 @@ import inspect
 import flask_restx
 
 from relations_restx.resource import ResourceError, ResourceIdentity, Resource, exceptions
-from relations_restx.source import Source
 
 def resources(module):
     """
