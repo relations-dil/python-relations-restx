@@ -1,7 +1,6 @@
 import unittest
 import unittest.mock
 import relations.unittest
-import relations_rest.unittest
 
 import flask
 import flask_restx
@@ -79,7 +78,7 @@ class MetaResource(relations_restx.Resource):
 class NetResource(relations_restx.Resource):
     MODEL = Net
 
-class TestRestX(relations_rest.unittest.TestCase):
+class TestRestX(relations.unittest.TestCase):
 
     def setUp(self):
 
