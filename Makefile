@@ -36,7 +36,7 @@ setup:
 		git+https://github.com/relations-dil/python-relations.git@0.6.10#egg=python-relations \
 		git+https://github.com/gaf3/opengui.git@0.8.3#egg=opengui && \
 	python setup.py install && \
-	python -m relations_restx.resource
+	python -m relations_restx.resource"
 
 tag:
 	-git tag -a $(VERSION) -m "Version $(VERSION)"
