@@ -14,8 +14,8 @@ def resources(module):
     """
 
     return [
-        m[1]
-        for m in inspect.getmembers(
+        cls[1]
+        for cls in inspect.getmembers(
             module,
             lambda model: inspect.isclass(model)
             and issubclass(model, Resource)
