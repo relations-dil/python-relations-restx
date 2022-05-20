@@ -7,6 +7,7 @@ import inspect
 import flask_restx
 
 from relations_restx.resource import ResourceError, ResourceIdentity, Resource, exceptions
+from relations_restx.api import Api
 
 def resources(module):
     """

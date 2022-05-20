@@ -1,10 +1,11 @@
 ACCOUNT=gaf3
 IMAGE=relations-restx
 INSTALL=python:3.8.5-alpine3.12
-VERSION?=0.4.0
+VERSION?=0.5.0
 DEBUG_PORT=5678
 TTY=$(shell if tty -s; then echo "-it"; fi)
 VOLUMES=-v ${PWD}/lib:/opt/service/lib \
+		-v ${PWD}/bin:/opt/service/bin \
 		-v ${PWD}/test:/opt/service/test \
 		-v ${PWD}/.pylintrc:/opt/service/.pylintrc \
 		-v ${PWD}/setup.py:/opt/service/setup.py
@@ -19,6 +20,9 @@ build:
 
 shell:
 	docker run $(TTY) $(VOLUMES) $(ENVIRONMENT) -p 127.0.0.1:$(DEBUG_PORT):5678 $(ACCOUNT)/$(IMAGE):$(VERSION) sh
+
+api:
+	docker run $(TTY) $(VOLUMES) $(ENVIRONMENT) -p 127.0.0.1:$(DEBUG_PORT):5678 -p 127.0.0.1:8288:80 $(ACCOUNT)/$(IMAGE):$(VERSION) bin/api.py
 
 debug:
 	docker run $(TTY) $(VOLUMES) $(ENVIRONMENT) -p 127.0.0.1:$(DEBUG_PORT):5678 $(ACCOUNT)/$(IMAGE):$(VERSION) sh -c "python -m ptvsd --host 0.0.0.0 --port 5678 --wait -m unittest discover -v test"

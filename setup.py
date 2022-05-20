@@ -3,7 +3,7 @@
 from setuptools import setup, find_packages
 setup(
     name="python-relations-restx",
-    version="0.4.0",
+    version="0.5.0",
     package_dir = {'': 'lib'},
     py_modules = [
         'relations_restx',
