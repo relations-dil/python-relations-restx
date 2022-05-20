@@ -214,7 +214,7 @@ class Resource(flask_restx.Resource, ResourceIdentity):
     @classmethod
     def sort(cls):
         """
-        Gets soirt from the flask request
+        Gets sort from the flask request
         """
 
         sort = []
@@ -250,7 +250,7 @@ class Resource(flask_restx.Resource, ResourceIdentity):
     @classmethod
     def count(cls):
         """
-        Gets soirt from the flask request
+        Gets count from the flask request
         """
 
         count = False
@@ -342,7 +342,7 @@ class Resource(flask_restx.Resource, ResourceIdentity):
     @exceptions
     def post(self):
         """
-        Creates one or more models
+        Creates one or more models or complex search
         """
 
         if "filter" in self.json():

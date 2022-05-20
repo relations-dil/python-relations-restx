@@ -32,37 +32,42 @@ class OpenApi(flask_restx.Swagger):
     Overrride Flask RestX Swagger
     """
 
-    def as_dict(self):
+    def relations_example(self, field):
         """
-        Overides swagger dict to make it OpenAPI
+        Generates an example alues
         """
 
-        specs = super().as_dict()
+        if "default" in field:
+            return field["default"]
 
-        del specs["swagger"]
-        specs["openapi"] = "3.0.3"
+        if field["kind"] == "str":
+            return ""
 
-        specs.setdefault("components", {})
-        specs["components"].setdefault("schemas", {})
+        if field["kind"] == "int":
+            return 0
 
-        for ns in self.api.namespaces:
-            for resource, urls, _, _ in ns.resources:
-                if hasattr(resource, "thy"):
-                    self.relations_resource(specs, ns, resource, urls)
+        if field["kind"] == "bool":
+            return True
 
-        return specs
+        if field["kind"] == "float":
+            return 0.0
 
-    def relations_schema(self, thy):
+    def relations_schemas(self, thy):
         """
         Generates specs from fields
         """
 
-        schema = {
+        schemas = {}
+
+        record = {
             "type": "object",
             "properties": {},
         }
 
         required = []
+        example = {
+
+        }
 
         for field in thy._fields:
 
@@ -72,16 +77,56 @@ class OpenApi(flask_restx.Swagger):
 
             if field.get("readonly"):
                 property["readOnly"] = True
+            else:
+                example[field["name"]] = self.relations_example(field)
 
             if field.get("required"):
                 required.append(field["name"])
 
-            schema["properties"][field['name']] = property
+            record["properties"][field['name']] = property
 
         if required:
-            schema["required"] = required
+            record["required"] = required
 
-        return schema
+        if example:
+            record["example"] = example
+
+        singular = {
+            "type": "object",
+            "properties": {
+                thy.SINGULAR: {
+                    "$ref": f"#/components/schemas/{thy._model.TITLE}"
+                }
+            },
+        }
+
+        plural = {
+            "type": "object",
+            "properties": {
+                thy.PLURAL: {
+                    "type": "array",
+                    "items": {
+                        "$ref": f"#/components/schemas/{thy._model.TITLE}"
+                    }
+                }
+            },
+        }
+
+        filter = {
+            "type": "object",
+            "properties": {
+                "filter": {
+                    "$ref": f"#/components/schemas/{thy._model.TITLE}"
+                }
+            },
+        }
+
+        return {
+            thy._model.TITLE: record,
+            thy.SINGULAR: singular,
+            thy.PLURAL: plural,
+            f"{thy.SINGULAR}_filter": filter,
+        }
 
     def relations_create_options(self, thy):
         """
@@ -89,14 +134,14 @@ class OpenApi(flask_restx.Swagger):
         """
 
         return {
-            "tags": [thy.SINGULAR],
+            "tags": [thy._model.TITLE],
             "operationId": f"{thy.SINGULAR}_create_options",
             "summary": f"generates and validates fields to create one {thy.SINGULAR} or many {thy.PLURAL}",
             "requestBody": {
                 "content": {
                     "application/json": {
                         "schema": {
-                            "type": "object"
+                            "$ref": f"#/components/schemas/{thy.SINGULAR}"
                         }
                     }
                 }
@@ -108,25 +153,38 @@ class OpenApi(flask_restx.Swagger):
             }
         }
 
-    def relations_create(self, thy):
+    def relations_create_filter(self, thy):
         """
         Generates create operation
         """
 
         return {
-            "tags": [thy.SINGULAR],
-            "operationId": f"{thy.SINGULAR}_create",
-            "summary": f"creates one {thy.SINGULAR} or many {thy.PLURAL}",
+            "tags": [thy._model.TITLE],
+            "operationId": f"{thy.SINGULAR}_create_search",
+            "summary": f"creates one {thy.SINGULAR} or many {thy.PLURAL} or a complex filter retrieve",
             "requestBody": {
                 "content": {
                     "application/json": {
                         "schema": {
-                            "type": "object"
+                            "oneOf": [
+                                {
+                                    "$ref": f"#/components/schemas/{thy.SINGULAR}"
+                                },
+                                {
+                                    "$ref": f"#/components/schemas/{thy.PLURAL}"
+                                },
+                                {
+                                    "$ref": f"#/components/schemas/{thy.SINGULAR}_filter"
+                                }
+                            ]
                         }
                     }
                 }
             },
             "responses": {
+                "200": {
+                    "description": f"many {thy.PLURAL} retrieved"
+                },
                 "201": {
                     "description": f"one {thy.SINGULAR} or many {thy.PLURAL} created"
                 },
@@ -142,7 +200,7 @@ class OpenApi(flask_restx.Swagger):
         """
 
         return {
-            "tags": [thy.SINGULAR],
+            "tags": [thy._model.TITLE],
             "operationId": f"{thy.SINGULAR}_retrieve_many",
             "summary": f"retrieves many {thy.PLURAL}",
             "parameters": [
@@ -169,7 +227,7 @@ class OpenApi(flask_restx.Swagger):
         """
 
         return {
-            "tags": [thy.SINGULAR],
+            "tags": [thy._model.TITLE],
             "operationId": f"{thy.SINGULAR}_update_many",
             "summary": f"updates many {thy.PLURAL}",
             "parameters": [
@@ -208,7 +266,7 @@ class OpenApi(flask_restx.Swagger):
         """
 
         return {
-            "tags": [thy.SINGULAR],
+            "tags": [thy._model.TITLE],
             "operationId": f"{thy.SINGULAR}_delete_many",
             "summary": f"deletes many {thy.PLURAL}",
             "parameters": [
@@ -244,7 +302,7 @@ class OpenApi(flask_restx.Swagger):
         """
 
         return {
-            "tags": [thy.SINGULAR],
+            "tags": [thy._model.TITLE],
             "operationId": f"{thy.SINGULAR}_update_options",
             "summary": f"generates and validates fields to update one {thy.SINGULAR}",
             "requestBody": {
@@ -272,7 +330,7 @@ class OpenApi(flask_restx.Swagger):
         """
 
         return {
-            "tags": [thy.SINGULAR],
+            "tags": [thy._model.TITLE],
             "operationId": f"{thy.SINGULAR}_retrieve_one",
             "summary": f"retrieves one {thy.SINGULAR}",
             "responses": {
@@ -291,7 +349,7 @@ class OpenApi(flask_restx.Swagger):
         """
 
         return {
-            "tags": [thy.SINGULAR],
+            "tags": [thy._model.TITLE],
             "operationId": f"{thy.SINGULAR}_update_one",
             "summary": f"updates one {thy.SINGULAR}",
             "requestBody": {
@@ -322,7 +380,7 @@ class OpenApi(flask_restx.Swagger):
         """
 
         return {
-            "tags": [thy.SINGULAR],
+            "tags": [thy._model.TITLE],
             "operationId": f"{thy.SINGULAR}_delete_one",
             "summary": f"deletes one {thy.SINGULAR}",
             "responses": {
@@ -350,7 +408,7 @@ class OpenApi(flask_restx.Swagger):
                     if method == "options":
                         specs["paths"][path][method].update(self.relations_create_options(thy))
                     elif method == "post":
-                        specs["paths"][path][method].update(self.relations_create(thy))
+                        specs["paths"][path][method].update(self.relations_create_filter(thy))
                     elif method == "get":
                         specs["paths"][path][method].update(self.relations_retrieve_many(thy))
                     elif method == "patch":
@@ -370,7 +428,6 @@ class OpenApi(flask_restx.Swagger):
                     elif method == "delete":
                         specs["paths"][path][method].update(self.relations_delete_one(thy))
 
-
     def relations_resource(self, specs, ns, resource, urls):
         """
         Overrides OpenApi specs for a Relations Resource
@@ -379,9 +436,29 @@ class OpenApi(flask_restx.Swagger):
         thy = resource.thy()
 
         specs["tags"].append({
-            "name": thy.SINGULAR
+            "name": thy._model.TITLE
         })
 
-        specs["components"]["schemas"][thy.SINGULAR] = self.relations_schema(thy)
+        specs["components"]["schemas"].update(self.relations_schemas(thy))
 
         self.relations_operations(specs, ns, urls, thy)
+
+    def as_dict(self):
+        """
+        Overides swagger dict to make it OpenAPI
+        """
+
+        specs = super().as_dict()
+
+        del specs["swagger"]
+        specs["openapi"] = "3.0.3"
+
+        specs.setdefault("components", {})
+        specs["components"].setdefault("schemas", {})
+
+        for ns in self.api.namespaces:
+            for resource, urls, _, _ in ns.resources:
+                if hasattr(resource, "thy"):
+                    self.relations_resource(specs, ns, resource, urls)
+
+        return specs
