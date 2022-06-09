@@ -342,7 +342,7 @@ class Resource(flask_restx.Resource, ResourceIdentity):
     @exceptions
     def post(self):
         """
-        Creates one or more models or complex search
+        Creates one or more models or complex
         """
 
         if "filter" in self.json():
@@ -379,7 +379,7 @@ class Resource(flask_restx.Resource, ResourceIdentity):
     @exceptions
     def patch(self, id=None):
         """
-        Updates models
+        Updates one or more models models
         """
 
         if self.SINGULAR not in self.json() and self.PLURAL not in self.json():
@@ -402,7 +402,7 @@ class Resource(flask_restx.Resource, ResourceIdentity):
     @exceptions
     def delete(self, id=None):
         """
-        Deletes models
+        Deletes one or more models models
         """
 
         if id is not None:

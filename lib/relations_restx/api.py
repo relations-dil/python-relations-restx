@@ -1,4 +1,5 @@
 
+import collections
 import flask_restx
 
 from werkzeug.utils import cached_property
@@ -32,13 +33,19 @@ class OpenApi(flask_restx.Swagger):
     Overrride Flask RestX Swagger
     """
 
-    def relations_example(self, field):
+    def relations_field_example(self, field):
         """
         Generates an example alues
         """
 
         if "default" in field:
             return field["default"]
+
+        if field.get("options"):
+            if field["kind"] == "set":
+                return [field["options"][0]]
+            else:
+                field["options"][0]
 
         if field["kind"] == "str":
             return ""
@@ -52,12 +59,28 @@ class OpenApi(flask_restx.Swagger):
         if field["kind"] == "float":
             return 0.0
 
+    def relations_one_example(self, thy, readonly=False):
+        """
+        Generates an example for a single record
+        """
+
+        example = {}
+
+        for field in thy._fields:
+
+            property = {
+                "type": field["kind"]
+            }
+
+            if readonly or not field.get("readonly"):
+                example[field["name"]] = self.relations_field_example(field)
+
+        return example
+
     def relations_schemas(self, thy):
         """
         Generates specs from fields
         """
-
-        schemas = {}
 
         record = {
             "type": "object",
@@ -65,9 +88,6 @@ class OpenApi(flask_restx.Swagger):
         }
 
         required = []
-        example = {
-
-        }
 
         for field in thy._fields:
 
@@ -77,8 +97,6 @@ class OpenApi(flask_restx.Swagger):
 
             if field.get("readonly"):
                 property["readOnly"] = True
-            else:
-                example[field["name"]] = self.relations_example(field)
 
             if field.get("required"):
                 required.append(field["name"])
@@ -88,16 +106,13 @@ class OpenApi(flask_restx.Swagger):
         if required:
             record["required"] = required
 
-        if example:
-            record["example"] = example
-
         singular = {
             "type": "object",
             "properties": {
                 thy.SINGULAR: {
                     "$ref": f"#/components/schemas/{thy._model.TITLE}"
                 }
-            },
+            }
         }
 
         plural = {
@@ -109,7 +124,7 @@ class OpenApi(flask_restx.Swagger):
                         "$ref": f"#/components/schemas/{thy._model.TITLE}"
                     }
                 }
-            },
+            }
         }
 
         filter = {
@@ -121,11 +136,56 @@ class OpenApi(flask_restx.Swagger):
             },
         }
 
+        sort = {
+            "type": "object",
+            "properties": {
+                "sort": {
+                    "type": "array",
+                    "description": "sort by these fields, prefix with + for ascending (default), - for descending",
+                    "default": thy._model._order
+                }
+            }
+        }
+
+        limit = {
+            "type": "object",
+            "properties": {
+                "limit": {
+                    "type": "integer",
+                    "description": f"limit the number of {thy.PLURAL}"
+                },
+                "limit__start": {
+                    "type": "integer",
+                    "description": f"limit the number of {thy.PLURAL} starting here"
+                },
+                "limit__per_page": {
+                    "type": "integer",
+                    "description": f"limit the number of {thy.PLURAL} by this page size (default {thy._model.CHUNK})"
+                },
+                "limit__page": {
+                    "type": "integer",
+                    "description": f"limit the number of {thy.PLURAL} and retrieve this page"
+                }
+            }
+        }
+
+        count = {
+            "properties": {
+                "count": {
+                    "type": "boolean",
+                    "description": f"return only the count of {thy.PLURAL} found"
+                }
+            }
+        }
+
         return {
             thy._model.TITLE: record,
             thy.SINGULAR: singular,
             thy.PLURAL: plural,
             f"{thy.SINGULAR}_filter": filter,
+            f"{thy.SINGULAR}_sort": sort,
+            f"{thy.SINGULAR}_limit": limit,
+            f"{thy.SINGULAR}_count": count
         }
 
     def relations_create_options(self, thy):
@@ -137,18 +197,36 @@ class OpenApi(flask_restx.Swagger):
             "tags": [thy._model.TITLE],
             "operationId": f"{thy.SINGULAR}_create_options",
             "summary": f"generates and validates fields to create one {thy.SINGULAR} or many {thy.PLURAL}",
+            "description": f"To generate, send nothing. To validate, send a {thy.SINGULAR}.",
             "requestBody": {
                 "content": {
                     "application/json": {
                         "schema": {
                             "$ref": f"#/components/schemas/{thy.SINGULAR}"
+                        },
+                        "examples": {
+                            "generate": {
+                                "value": {}
+                            },
+                            "validate": {
+                                "value": {
+                                    thy.SINGULAR: self.relations_one_example(thy)
+                                }
+                            }
                         }
                     }
                 }
             },
             "responses": {
                 "200": {
-                    "description": f"fields to create one {thy.SINGULAR} or many {thy.PLURAL} generated and validated"
+                    "description": f"fields to create one {thy.SINGULAR} or many {thy.PLURAL} generated and validated",
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": '#/components/schemas/Options'
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -161,32 +239,147 @@ class OpenApi(flask_restx.Swagger):
         return {
             "tags": [thy._model.TITLE],
             "operationId": f"{thy.SINGULAR}_create_search",
-            "summary": f"creates one {thy.SINGULAR} or many {thy.PLURAL} or a complex filter retrieve",
+            "summary": f"creates one {thy.SINGULAR} or many {thy.PLURAL} or a complex retrieve",
+            "description": f"To create one, send {thy.SINGULAR}. To create many, send {thy.PLURAL}. To retrieve send filter (sort, limit, count optional).",
             "requestBody": {
                 "content": {
                     "application/json": {
                         "schema": {
                             "oneOf": [
                                 {
-                                    "$ref": f"#/components/schemas/{thy.SINGULAR}"
+                                    "$ref": f"#/components/schemas/{thy.SINGULAR}",
                                 },
                                 {
                                     "$ref": f"#/components/schemas/{thy.PLURAL}"
                                 },
                                 {
-                                    "$ref": f"#/components/schemas/{thy.SINGULAR}_filter"
+                                    "oneOf": [
+                                        {
+                                            "$ref": f"#/components/schemas/{thy.SINGULAR}_filter"
+                                        }
+                                    ],
+                                    "anyOf": [
+                                        {
+                                            "$ref": f"#/components/schemas/{thy.SINGULAR}_sort"
+                                        },
+                                        {
+                                            "$ref": f"#/components/schemas/{thy.SINGULAR}_limit"
+                                        },
+                                        {
+                                            "$ref": f"#/components/schemas/{thy.SINGULAR}_count"
+                                        }
+                                    ]
                                 }
                             ]
+                        },
+                        "examples": {
+                            "create one": {
+                                "value": {
+                                    thy.SINGULAR: self.relations_one_example(thy)
+                                }
+                            },
+                            "create many": {
+                                "value": {
+                                    thy.PLURAL: [self.relations_one_example(thy)]
+                                }
+                            },
+                            "complex retrieve": {
+                                "value": {
+                                    "filter": self.relations_one_example(thy),
+                                    "sort": thy._model._order
+                                }
+                            },
+                            "limit retrieve": {
+                                "value": {
+                                    "filter": self.relations_one_example(thy),
+                                    "sort": thy._model._order,
+                                    "limit": {
+                                        "limit": thy._model.CHUNK,
+                                        "start": 0
+                                    }
+                                }
+                            },
+                            "paginate retrieve": {
+                                "value": {
+                                    "filter": self.relations_one_example(thy),
+                                    "sort": thy._model._order,
+                                    "limit": {
+                                        "page": 1,
+                                        "per_page": thy._model.CHUNK
+                                    }
+                                }
+                            },
+                            "count retrieve": {
+                                "value": {
+                                    "filter": self.relations_one_example(thy),
+                                    "count": True
+                                }
+                            }
                         }
                     }
                 }
             },
             "responses": {
                 "200": {
-                    "description": f"many {thy.PLURAL} retrieved"
+                    "description": f"many {thy.PLURAL} retrieved",
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "oneOf": [
+                                    {
+                                        "$ref": f"#/components/schemas/{thy.PLURAL}"
+                                    },
+                                    {
+                                        "$ref": f"#/components/schemas/Retrieved"
+                                    },
+                                ]
+                            },
+                            "examples": {
+                                "list retrieve": {
+                                    "value": {
+                                        thy.PLURAL: [self.relations_one_example(thy, readonly=True)],
+                                        "overflow": False,
+                                        "formats": {}
+                                    }
+                                },
+                                "count retrieve": {
+                                    "value": {
+                                        "count": 1
+                                    }
+                                }
+                            }
+                        }
+                    }
                 },
                 "201": {
-                    "description": f"one {thy.SINGULAR} or many {thy.PLURAL} created"
+                    "description": f"one {thy.SINGULAR} or many {thy.PLURAL} created",
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "oneOf": [
+                                    {
+                                        "$ref": f"#/components/schemas/{thy.SINGULAR}",
+                                        "description": "lol"
+                                    },
+                                    {
+                                        "$ref": f"#/components/schemas/{thy.PLURAL}"
+                                    }
+                                ]
+                            },
+                            "examples": {
+                                "create one": {
+                                    "value": {
+                                        thy.SINGULAR: self.relations_one_example(thy, readonly=True)
+                                    }
+                                },
+                                "create many": {
+                                    "value": {
+                                        thy.PLURAL: [self.relations_one_example(thy, readonly=True)]
+                                    }
+                                }
+                            }
+                        }
+                    }
                 },
                 "400": {
                     "description": f"unable to create due to bad request"
@@ -207,16 +400,75 @@ class OpenApi(flask_restx.Swagger):
                 {
                     "in": "query",
                     "schema": {
-                        "type": "object"
+                        "type": "object",
+                        "properties": {
+                            "dude": {
+                                "type": "integer",
+                                "example": 5,
+                                "description": "lolwut"
+                            }
+                        },
+
                     },
                     "style": "form",
                     "explode": True,
-                        "name": "params"
+                    "name": "params",
+                    "examples": {
+                        "retrieve": {
+                            "value": {
+                                **self.relations_one_example(thy),
+                                "sort": ",".join(thy._model._order)
+                            }
+                        },
+                        "limit": {
+                            "value": {
+                                **self.relations_one_example(thy),
+                                "sort": ",".join(thy._model._order),
+                                "limit": thy._model.CHUNK,
+                                "limit__start": 0
+                            }
+                        },
+                        "paginate": {
+                            "value": {
+                                **self.relations_one_example(thy),
+                                "sort": ",".join(thy._model._order),
+                                "limit__page": 1,
+                                "limit__per_page": thy._model.CHUNK
+                            }
+                        },
+                        "count": {
+                            "value": {
+                                **self.relations_one_example(thy),
+                                "count": 1
+                            }
+                        }
+                    }
                 }
             ],
             "responses": {
                 "200": {
-                    "description": f"many {thy.PLURAL} retrieved"
+                    "description": f"many {thy.PLURAL} retrieved",
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": f"#/components/schemas/{thy.PLURAL}"
+                            },
+                            "examples": {
+                                "list retrieve": {
+                                    "value": {
+                                        thy.PLURAL: [self.relations_one_example(thy, readonly=True)],
+                                        "overflow": False,
+                                        "formats": {}
+                                    }
+                                },
+                                "count retrieve": {
+                                    "value": {
+                                        "count": 1
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -238,21 +490,102 @@ class OpenApi(flask_restx.Swagger):
                     },
                     "style": "form",
                     "explode": True,
-                        "name": "params"
+                    "name": "params",
+                    "examples": {
+                        "filter through params": {
+                            "value": {
+                                **self.relations_one_example(thy)
+                            }
+                        },
+                        "filter through params limit": {
+                            "value": {
+                                **self.relations_one_example(thy),
+                                "sort": ",".join(thy._model._order),
+                                "limit": thy._model.CHUNK,
+                                "limit__start": 0
+                            }
+                        },
+                        "filter through params paginate": {
+                            "value": {
+                                **self.relations_one_example(thy),
+                                "sort": ",".join(thy._model._order),
+                                "limit__page": 1,
+                                "limit__per_page": thy._model.CHUNK
+                            }
+                        },
+                        "filter through body": {
+                            "value": {}
+                        }
+                    }
                 }
             ],
             "requestBody": {
                 "content": {
                     "application/json": {
                         "schema": {
-                            "type": "object"
+                            "anyOf": [
+                                {
+                                    "$ref": f"#/components/schemas/{thy.SINGULAR}"
+                                },
+                                {
+                                    "$ref": f"#/components/schemas/{thy.SINGULAR}_filter"
+                                }
+                            ]
+                        },
+                        "examples": {
+                            "filter through params": {
+                                "value": {
+                                    thy.PLURAL: self.relations_one_example(thy)
+                                }
+                            },
+                            "filter through body": {
+                                "value": {
+                                    "filter": self.relations_one_example(thy),
+                                    thy.PLURAL: self.relations_one_example(thy)
+                                }
+                            },
+                            "filter through body limit": {
+                                "value": {
+                                    "filter": self.relations_one_example(thy),
+                                    "sort": thy._model._order,
+                                    "limit": {
+                                        "limit": thy._model.CHUNK,
+                                        "start": 0
+                                    },
+                                    thy.PLURAL: self.relations_one_example(thy)
+                                }
+                            },
+                            "filter through body paginate": {
+                                "value": {
+                                    "filter": self.relations_one_example(thy),
+                                    "sort": thy._model._order,
+                                    "limit": {
+                                        "page": 1,
+                                        "per_page": thy._model.CHUNK
+                                    },
+                                    thy.PLURAL: self.relations_one_example(thy)
+                                }
+                            },
+                            "update all": {
+                                "value": {
+                                    "filter": {},
+                                    thy.PLURAL: self.relations_one_example(thy)
+                                }
+                            }
                         }
                     }
                 }
             },
             "responses": {
                 "202": {
-                    "description": f"many {thy.PLURAL} updated"
+                    "description": f"many {thy.PLURAL} updated",
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": f"#/components/schemas/Updated"
+                            }
+                        }
+                    }
                 },
                 "400": {
                     "description": f"unable to update due to bad request"
@@ -277,21 +610,96 @@ class OpenApi(flask_restx.Swagger):
                     },
                     "style": "form",
                     "explode": True,
-                        "name": "params"
+                    "name": "params",
+                    "examples": {
+                        "filter through params": {
+                            "value": {
+                                **self.relations_one_example(thy)
+                            }
+                        },
+                        "filter through params limit": {
+                            "value": {
+                                **self.relations_one_example(thy),
+                                "sort": ",".join(thy._model._order),
+                                "limit": thy._model.CHUNK,
+                                "limit__start": 0
+                            }
+                        },
+                        "filter through params paginate": {
+                            "value": {
+                                **self.relations_one_example(thy),
+                                "sort": ",".join(thy._model._order),
+                                "limit__page": 1,
+                                "limit__per_page": thy._model.CHUNK
+                            }
+                        },
+                        "filter through body": {
+                            "value": {}
+                        }
+                    }
                 }
             ],
             "requestBody": {
                 "content": {
                     "application/json": {
                         "schema": {
-                            "type": "object"
+                            "anyOf": [
+                                {
+                                    "$ref": f"#/components/schemas/{thy.SINGULAR}_filter"
+                                }
+                            ]
+                        },
+                        "examples": {
+                            "filter through params": {
+                                "value": {}
+                            },
+                            "filter through body": {
+                                "value": {
+                                    "filter": self.relations_one_example(thy)
+                                }
+                            },
+                            "filter through body limit": {
+                                "value": {
+                                    "filter": self.relations_one_example(thy),
+                                    "sort": thy._model._order,
+                                    "limit": {
+                                        "limit": thy._model.CHUNK,
+                                        "start": 0
+                                    }
+                                }
+                            },
+                            "filter through body paginate": {
+                                "value": {
+                                    "filter": self.relations_one_example(thy),
+                                    "sort": thy._model._order,
+                                    "limit": {
+                                        "page": 1,
+                                        "per_page": thy._model.CHUNK
+                                    }
+                                }
+                            },
+                            "delete all": {
+                                "value": {
+                                    "filter": {}
+                                }
+                            }
                         }
                     }
                 }
             },
             "responses": {
                 "202": {
-                    "description": f"many {thy.PLURAL} deleted"
+                    "description": f"many {thy.PLURAL} deleted",
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": f"#/components/schemas/Deleted"
+                            }
+                        }
+                    }
+                },
+                "400": {
+                    "description": f"unable to updeletedate due to bad request"
                 }
             }
         }
@@ -309,14 +717,31 @@ class OpenApi(flask_restx.Swagger):
                 "content": {
                     "application/json": {
                         "schema": {
-                            "type": "object"
+                            "$ref": f"#/components/schemas/{thy.SINGULAR}"
+                        },
+                        "examples": {
+                            "generate": {
+                                "value": {}
+                            },
+                            "validate": {
+                                "value": {
+                                    thy.SINGULAR: self.relations_one_example(thy)
+                                }
+                            }
                         }
                     }
                 }
             },
             "responses": {
                 "200": {
-                    "description": f"fields to update one {thy.SINGULAR} generated and validated"
+                    "description": f"fields to update one {thy.SINGULAR} generated and validated",
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": '#/components/schemas/Options'
+                            }
+                        }
+                    }
                 },
                 "404": {
                     "description": f"{thy.SINGULAR} not found"
@@ -326,7 +751,7 @@ class OpenApi(flask_restx.Swagger):
 
     def relations_retrieve_one(self, thy):
         """
-        Generates reteieve one operation
+        Generates retrieve one operation
         """
 
         return {
@@ -335,7 +760,23 @@ class OpenApi(flask_restx.Swagger):
             "summary": f"retrieves one {thy.SINGULAR}",
             "responses": {
                 "200": {
-                    "description": f"one {thy.SINGULAR} retrieved"
+                    "description": f"one {thy.SINGULAR} retrieved",
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": f"#/components/schemas/{thy.SINGULAR}"
+                            },
+                            "examples": {
+                                "retrieve": {
+                                    "value": {
+                                        thy.SINGULAR: self.relations_one_example(thy, readonly=True),
+                                        "overflow": False,
+                                        "formats": {}
+                                    }
+                                }
+                            }
+                        }
+                    }
                 },
                 "404": {
                     "description": f"{thy.SINGULAR} not found"
@@ -345,7 +786,7 @@ class OpenApi(flask_restx.Swagger):
 
     def relations_update_one(self, thy):
         """
-        Generates update eone operation
+        Generates update one operation
         """
 
         return {
@@ -356,14 +797,28 @@ class OpenApi(flask_restx.Swagger):
                 "content": {
                     "application/json": {
                         "schema": {
-                            "type": "object"
+                            "$ref": f"#/components/schemas/{thy.SINGULAR}"
+                        },
+                        "examples": {
+                            "update": {
+                                "value": {
+                                    thy.SINGULAR: self.relations_one_example(thy)
+                                }
+                            }
                         }
                     }
                 }
             },
             "responses": {
                 "202": {
-                    "description": f"one {thy.SINGULAR} updated"
+                    "description": f"one {thy.SINGULAR} updated",
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": f"#/components/schemas/Updated"
+                            }
+                        }
+                    }
                 },
                 "400": {
                     "description": f"unable to update due to bad request"
@@ -385,7 +840,14 @@ class OpenApi(flask_restx.Swagger):
             "summary": f"deletes one {thy.SINGULAR}",
             "responses": {
                 "202": {
-                    "description": f"one {thy.SINGULAR} deleted"
+                    "description": f"one {thy.SINGULAR} deleted",
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": f"#/components/schemas/"
+                            }
+                        }
+                    }
                 },
                 "404": {
                     "description": f"{thy.SINGULAR} not found"
@@ -402,31 +864,33 @@ class OpenApi(flask_restx.Swagger):
 
             path = flask_restx.swagger.extract_path(url)
 
-            for method in ["options", "get", "post", "patch", "delete"]:
+            methods = specs["paths"][path]
+            specs["paths"][path] = collections.OrderedDict()
+
+            for method in ["options", "post", "get", "patch", "delete"]:
 
                 if "{" not in path:
                     if method == "options":
-                        specs["paths"][path][method].update(self.relations_create_options(thy))
+                        specs["paths"][path][method] = {**methods[method], **self.relations_create_options(thy)}
                     elif method == "post":
-                        specs["paths"][path][method].update(self.relations_create_filter(thy))
+                        specs["paths"][path][method] = {**methods[method], **self.relations_create_filter(thy)}
                     elif method == "get":
-                        specs["paths"][path][method].update(self.relations_retrieve_many(thy))
+                        specs["paths"][path][method] = {**methods[method], **self.relations_retrieve_many(thy)}
                     elif method == "patch":
-                        specs["paths"][path][method].update(self.relations_update_many(thy))
+                        specs["paths"][path][method] = {**methods[method], **self.relations_update_many(thy)}
                     elif method == "delete":
-                        specs["paths"][path][method].update(self.relations_delete_many(thy))
+                        specs["paths"][path][method] = {**methods[method], **self.relations_delete_many(thy)}
                 else:
                     if method == "options":
-                        specs["paths"][path][method].update(self.relations_update_options(thy))
+                        specs["paths"][path][method] = {**methods[method], **self.relations_update_options(thy)}
                     elif method == "post":
-                        del specs["paths"][path][method]
                         continue
                     elif method == "get":
-                        specs["paths"][path][method].update(self.relations_retrieve_one(thy))
+                        specs["paths"][path][method] = {**methods[method], **self.relations_retrieve_one(thy)}
                     elif method == "patch":
-                        specs["paths"][path][method].update(self.relations_update_one(thy))
+                        specs["paths"][path][method] = {**methods[method], **self.relations_update_one(thy)}
                     elif method == "delete":
-                        specs["paths"][path][method].update(self.relations_delete_one(thy))
+                        specs["paths"][path][method] = {**methods[method], **self.relations_delete_one(thy)}
 
     def relations_resource(self, specs, ns, resource, urls):
         """
@@ -455,6 +919,116 @@ class OpenApi(flask_restx.Swagger):
 
         specs.setdefault("components", {})
         specs["components"].setdefault("schemas", {})
+
+        specs["components"]["schemas"].update({
+            "Field": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "name of the field"
+                    },
+                    "value": {
+                        "description": "the current value of the field"
+                    },
+                    "original": {
+                        "description": "the original value of the field"
+                    },
+                    "default": {
+                        "description": "the default value of the field"
+                    },
+                    "options": {
+                        "type": "array",
+                        "items": {},
+                        "description": "array of options to select from"
+                    },
+                    "required": {
+                        "type": "boolean",
+                        "description": "whether the field is required"
+                    },
+                    "multi": {
+                        "type": "boolean",
+                        "description": "whether multiple options can be selected"
+                    },
+                    "trigger": {
+                        "type": "boolean",
+                        "description": "whether to reload when this field changes"
+                    },
+                    "readonly": {
+                        "type": "boolean",
+                        "description": "whether the field is readonly"
+                    },
+                    "validation": {
+                        "description": "how to validate this field"
+                    },
+                    "content": {
+                        "type": "object",
+                        "description": "used for any other data, like titles"
+                    },
+                    "errors": {
+                        "type": "array",
+                        "description": "the original value of the field"
+                    }
+                }
+            },
+            "Options": {
+                "type": "object",
+                "properties": {
+                    "fields": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Field"
+                        }
+                    },
+                    "errors": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "Retrieved": {
+                "type": "object",
+                "properties": {
+                    "overflow": {
+                        "type": "boolean",
+                        "description": "whether more could have been retrieved"
+                    },
+                    "format": {
+                        "type": "object",
+                        "description": "Formatting information for fields, like titles"
+                    }
+                }
+            },
+            "Counted": {
+                "type": "object",
+                "properties": {
+                    "count": {
+                        "type": "integer",
+                        "description": "count of those retrieved"
+                    }
+                }
+            },
+            "Updated": {
+                "type": "object",
+                "properties": {
+                    "updated": {
+                        "type": "integer",
+                        "description": "count of those updated"
+                    }
+                }
+            },
+            "Deleted": {
+                "type": "object",
+                "properties": {
+                    "deleted": {
+                        "type": "integer",
+                        "description": "count of those deleted"
+                    }
+                }
+            }
+        })
 
         for ns in self.api.namespaces:
             for resource, urls, _, _ in ns.resources:

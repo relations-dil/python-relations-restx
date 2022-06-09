@@ -2,7 +2,8 @@ ACCOUNT=gaf3
 IMAGE=relations-restx
 INSTALL=python:3.8.5-alpine3.12
 VERSION?=0.5.0
-DEBUG_PORT=5678
+DEBUG_PORT=18288
+TILT_PORT=28288
 TTY=$(shell if tty -s; then echo "-it"; fi)
 VOLUMES=-v ${PWD}/lib:/opt/service/lib \
 		-v ${PWD}/bin:/opt/service/bin \
@@ -21,9 +22,6 @@ build:
 shell:
 	docker run $(TTY) $(VOLUMES) $(ENVIRONMENT) -p 127.0.0.1:$(DEBUG_PORT):5678 $(ACCOUNT)/$(IMAGE):$(VERSION) sh
 
-api:
-	docker run $(TTY) $(VOLUMES) $(ENVIRONMENT) -p 127.0.0.1:$(DEBUG_PORT):5678 -p 127.0.0.1:8288:80 $(ACCOUNT)/$(IMAGE):$(VERSION) bin/api.py
-
 debug:
 	docker run $(TTY) $(VOLUMES) $(ENVIRONMENT) -p 127.0.0.1:$(DEBUG_PORT):5678 $(ACCOUNT)/$(IMAGE):$(VERSION) sh -c "python -m ptvsd --host 0.0.0.0 --port 5678 --wait -m unittest discover -v test"
 
@@ -41,6 +39,14 @@ setup:
 		git+https://github.com/gaf3/opengui.git@0.8.3#egg=opengui && \
 	python setup.py install && \
 	python -m relations_restx.resource"
+
+up:
+	kubectx docker-desktop
+	tilt --port $(TILT_PORT) up
+
+down:
+	kubectx docker-desktop
+	tilt down
 
 tag:
 	-git tag -a $(VERSION) -m "Version $(VERSION)"
