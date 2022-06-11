@@ -85,12 +85,12 @@ class TestRestX(relations.unittest.TestCase):
         self.source = relations.unittest.MockSource("TestRestXResource")
 
         self.app = flask.Flask("resource-api")
-        restx = flask_restx.Api(self.app)
+        self.restx = relations_restx.Api(self.app)
 
-        restx.add_resource(SimpleResource, *SimpleResource.thy().endpoints())
-        restx.add_resource(PlainResource, *PlainResource.thy().endpoints())
-        restx.add_resource(MetaResource, *MetaResource.thy().endpoints())
-        restx.add_resource(NetResource, *NetResource.thy().endpoints())
+        self.restx.add_resource(SimpleResource, *SimpleResource.thy().endpoints())
+        self.restx.add_resource(PlainResource, *PlainResource.thy().endpoints())
+        self.restx.add_resource(MetaResource, *MetaResource.thy().endpoints())
+        self.restx.add_resource(NetResource, *NetResource.thy().endpoints())
 
         self.api = self.app.test_client()
 

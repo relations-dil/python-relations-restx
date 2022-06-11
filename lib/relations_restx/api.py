@@ -1,31 +1,11 @@
+"""
+Module for overriding the base RestX API
+"""
 
 import collections
 import flask_restx
 
 from werkzeug.utils import cached_property
-
-class Api(flask_restx.Api):
-    """
-    Overrride Flask RestX API
-    """
-
-    @cached_property
-    def __schema__(self):
-        """
-        The Swagger specifications/schema for this API
-
-        :returns dict: the schema as a serializable dict
-        """
-        if not self._schema:
-            try:
-                self._schema = OpenApi(self).as_dict()
-            except Exception:
-                # Log the source exception for debugging purpose
-                # and return an error message
-                msg = "Unable to render schema"
-                flask_restx.api.log.exception(msg)  # This will provide a full traceback
-                return {"error": msg}
-        return self._schema
 
 
 class OpenApi(flask_restx.Swagger):
@@ -33,7 +13,8 @@ class OpenApi(flask_restx.Swagger):
     Overrride Flask RestX Swagger
     """
 
-    def relations_field_example(self, field):
+    @staticmethod
+    def relations_value(field): # pylint: disable=too-many-return-statements
         """
         Generates an example alues
         """
@@ -44,8 +25,7 @@ class OpenApi(flask_restx.Swagger):
         if field.get("options"):
             if field["kind"] == "set":
                 return [field["options"][0]]
-            else:
-                field["options"][0]
+            return field["options"][0]
 
         if field["kind"] == "str":
             return ""
@@ -54,12 +34,15 @@ class OpenApi(flask_restx.Swagger):
             return 0
 
         if field["kind"] == "bool":
-            return True
+            return False
 
         if field["kind"] == "float":
             return 0.0
 
-    def relations_one_example(self, thy, readonly=False):
+        return None
+
+    @classmethod
+    def relations_example(cls, thy, readonly=False):
         """
         Generates an example for a single record
         """
@@ -67,17 +50,13 @@ class OpenApi(flask_restx.Swagger):
         example = {}
 
         for field in thy._fields:
-
-            property = {
-                "type": field["kind"]
-            }
-
             if readonly or not field.get("readonly"):
-                example[field["name"]] = self.relations_field_example(field)
+                example[field["name"]] = cls.relations_value(field)
 
         return example
 
-    def relations_schemas(self, thy):
+    @staticmethod
+    def relations_schemas(thy):
         """
         Generates specs from fields
         """
@@ -170,6 +149,7 @@ class OpenApi(flask_restx.Swagger):
         }
 
         count = {
+            "type": "object",
             "properties": {
                 "count": {
                     "type": "boolean",
@@ -188,7 +168,8 @@ class OpenApi(flask_restx.Swagger):
             f"{thy.SINGULAR}_count": count
         }
 
-    def relations_create_options(self, thy):
+    @classmethod
+    def relations_create_options(cls, thy):
         """
         Generates create options operation
         """
@@ -210,7 +191,7 @@ class OpenApi(flask_restx.Swagger):
                             },
                             "validate": {
                                 "value": {
-                                    thy.SINGULAR: self.relations_one_example(thy)
+                                    thy.SINGULAR: cls.relations_example(thy)
                                 }
                             }
                         }
@@ -231,7 +212,8 @@ class OpenApi(flask_restx.Swagger):
             }
         }
 
-    def relations_create_filter(self, thy):
+    @classmethod
+    def relations_create_filter(cls, thy):
         """
         Generates create operation
         """
@@ -275,23 +257,23 @@ class OpenApi(flask_restx.Swagger):
                         "examples": {
                             "create one": {
                                 "value": {
-                                    thy.SINGULAR: self.relations_one_example(thy)
+                                    thy.SINGULAR: cls.relations_example(thy)
                                 }
                             },
                             "create many": {
                                 "value": {
-                                    thy.PLURAL: [self.relations_one_example(thy)]
+                                    thy.PLURAL: [cls.relations_example(thy)]
                                 }
                             },
                             "complex retrieve": {
                                 "value": {
-                                    "filter": self.relations_one_example(thy),
+                                    "filter": cls.relations_example(thy),
                                     "sort": thy._model._order
                                 }
                             },
                             "limit retrieve": {
                                 "value": {
-                                    "filter": self.relations_one_example(thy),
+                                    "filter": cls.relations_example(thy),
                                     "sort": thy._model._order,
                                     "limit": {
                                         "limit": thy._model.CHUNK,
@@ -301,7 +283,7 @@ class OpenApi(flask_restx.Swagger):
                             },
                             "paginate retrieve": {
                                 "value": {
-                                    "filter": self.relations_one_example(thy),
+                                    "filter": cls.relations_example(thy),
                                     "sort": thy._model._order,
                                     "limit": {
                                         "page": 1,
@@ -311,7 +293,7 @@ class OpenApi(flask_restx.Swagger):
                             },
                             "count retrieve": {
                                 "value": {
-                                    "filter": self.relations_one_example(thy),
+                                    "filter": cls.relations_example(thy),
                                     "count": True
                                 }
                             }
@@ -330,14 +312,14 @@ class OpenApi(flask_restx.Swagger):
                                         "$ref": f"#/components/schemas/{thy.PLURAL}"
                                     },
                                     {
-                                        "$ref": f"#/components/schemas/Retrieved"
+                                        "$ref": "#/components/schemas/Retrieved"
                                     },
                                 ]
                             },
                             "examples": {
                                 "list retrieve": {
                                     "value": {
-                                        thy.PLURAL: [self.relations_one_example(thy, readonly=True)],
+                                        thy.PLURAL: [cls.relations_example(thy, readonly=True)],
                                         "overflow": False,
                                         "formats": {}
                                     }
@@ -369,12 +351,12 @@ class OpenApi(flask_restx.Swagger):
                             "examples": {
                                 "create one": {
                                     "value": {
-                                        thy.SINGULAR: self.relations_one_example(thy, readonly=True)
+                                        thy.SINGULAR: cls.relations_example(thy, readonly=True)
                                     }
                                 },
                                 "create many": {
                                     "value": {
-                                        thy.PLURAL: [self.relations_one_example(thy, readonly=True)]
+                                        thy.PLURAL: [cls.relations_example(thy, readonly=True)]
                                     }
                                 }
                             }
@@ -382,12 +364,13 @@ class OpenApi(flask_restx.Swagger):
                     }
                 },
                 "400": {
-                    "description": f"unable to create due to bad request"
+                    "description": "unable to create due to bad request"
                 }
             }
         }
 
-    def relations_retrieve_many(self, thy):
+    @classmethod
+    def relations_retrieve_many(cls, thy):
         """
         Generates reteieve many operation
         """
@@ -416,13 +399,13 @@ class OpenApi(flask_restx.Swagger):
                     "examples": {
                         "retrieve": {
                             "value": {
-                                **self.relations_one_example(thy),
+                                **cls.relations_example(thy),
                                 "sort": ",".join(thy._model._order)
                             }
                         },
                         "limit": {
                             "value": {
-                                **self.relations_one_example(thy),
+                                **cls.relations_example(thy),
                                 "sort": ",".join(thy._model._order),
                                 "limit": thy._model.CHUNK,
                                 "limit__start": 0
@@ -430,7 +413,7 @@ class OpenApi(flask_restx.Swagger):
                         },
                         "paginate": {
                             "value": {
-                                **self.relations_one_example(thy),
+                                **cls.relations_example(thy),
                                 "sort": ",".join(thy._model._order),
                                 "limit__page": 1,
                                 "limit__per_page": thy._model.CHUNK
@@ -438,7 +421,7 @@ class OpenApi(flask_restx.Swagger):
                         },
                         "count": {
                             "value": {
-                                **self.relations_one_example(thy),
+                                **cls.relations_example(thy),
                                 "count": 1
                             }
                         }
@@ -456,7 +439,7 @@ class OpenApi(flask_restx.Swagger):
                             "examples": {
                                 "list retrieve": {
                                     "value": {
-                                        thy.PLURAL: [self.relations_one_example(thy, readonly=True)],
+                                        thy.PLURAL: [cls.relations_example(thy, readonly=True)],
                                         "overflow": False,
                                         "formats": {}
                                     }
@@ -473,7 +456,8 @@ class OpenApi(flask_restx.Swagger):
             }
         }
 
-    def relations_update_many(self, thy):
+    @classmethod
+    def relations_update_many(cls, thy):
         """
         Generates update emany operation
         """
@@ -494,12 +478,12 @@ class OpenApi(flask_restx.Swagger):
                     "examples": {
                         "filter through params": {
                             "value": {
-                                **self.relations_one_example(thy)
+                                **cls.relations_example(thy)
                             }
                         },
                         "filter through params limit": {
                             "value": {
-                                **self.relations_one_example(thy),
+                                **cls.relations_example(thy),
                                 "sort": ",".join(thy._model._order),
                                 "limit": thy._model.CHUNK,
                                 "limit__start": 0
@@ -507,7 +491,7 @@ class OpenApi(flask_restx.Swagger):
                         },
                         "filter through params paginate": {
                             "value": {
-                                **self.relations_one_example(thy),
+                                **cls.relations_example(thy),
                                 "sort": ",".join(thy._model._order),
                                 "limit__page": 1,
                                 "limit__per_page": thy._model.CHUNK
@@ -535,41 +519,41 @@ class OpenApi(flask_restx.Swagger):
                         "examples": {
                             "filter through params": {
                                 "value": {
-                                    thy.PLURAL: self.relations_one_example(thy)
+                                    thy.PLURAL: cls.relations_example(thy)
                                 }
                             },
                             "filter through body": {
                                 "value": {
-                                    "filter": self.relations_one_example(thy),
-                                    thy.PLURAL: self.relations_one_example(thy)
+                                    "filter": cls.relations_example(thy),
+                                    thy.PLURAL: cls.relations_example(thy)
                                 }
                             },
                             "filter through body limit": {
                                 "value": {
-                                    "filter": self.relations_one_example(thy),
+                                    "filter": cls.relations_example(thy),
                                     "sort": thy._model._order,
                                     "limit": {
                                         "limit": thy._model.CHUNK,
                                         "start": 0
                                     },
-                                    thy.PLURAL: self.relations_one_example(thy)
+                                    thy.PLURAL: cls.relations_example(thy)
                                 }
                             },
                             "filter through body paginate": {
                                 "value": {
-                                    "filter": self.relations_one_example(thy),
+                                    "filter": cls.relations_example(thy),
                                     "sort": thy._model._order,
                                     "limit": {
                                         "page": 1,
                                         "per_page": thy._model.CHUNK
                                     },
-                                    thy.PLURAL: self.relations_one_example(thy)
+                                    thy.PLURAL: cls.relations_example(thy)
                                 }
                             },
                             "update all": {
                                 "value": {
                                     "filter": {},
-                                    thy.PLURAL: self.relations_one_example(thy)
+                                    thy.PLURAL: cls.relations_example(thy)
                                 }
                             }
                         }
@@ -582,18 +566,19 @@ class OpenApi(flask_restx.Swagger):
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": f"#/components/schemas/Updated"
+                                "$ref": "#/components/schemas/Updated"
                             }
                         }
                     }
                 },
                 "400": {
-                    "description": f"unable to update due to bad request"
+                    "description": "unable to update due to bad request"
                 }
             }
         }
 
-    def relations_delete_many(self, thy):
+    @classmethod
+    def relations_delete_many(cls, thy):
         """
         Generates delete many operation
         """
@@ -614,12 +599,12 @@ class OpenApi(flask_restx.Swagger):
                     "examples": {
                         "filter through params": {
                             "value": {
-                                **self.relations_one_example(thy)
+                                **cls.relations_example(thy)
                             }
                         },
                         "filter through params limit": {
                             "value": {
-                                **self.relations_one_example(thy),
+                                **cls.relations_example(thy),
                                 "sort": ",".join(thy._model._order),
                                 "limit": thy._model.CHUNK,
                                 "limit__start": 0
@@ -627,7 +612,7 @@ class OpenApi(flask_restx.Swagger):
                         },
                         "filter through params paginate": {
                             "value": {
-                                **self.relations_one_example(thy),
+                                **cls.relations_example(thy),
                                 "sort": ",".join(thy._model._order),
                                 "limit__page": 1,
                                 "limit__per_page": thy._model.CHUNK
@@ -655,12 +640,12 @@ class OpenApi(flask_restx.Swagger):
                             },
                             "filter through body": {
                                 "value": {
-                                    "filter": self.relations_one_example(thy)
+                                    "filter": cls.relations_example(thy)
                                 }
                             },
                             "filter through body limit": {
                                 "value": {
-                                    "filter": self.relations_one_example(thy),
+                                    "filter": cls.relations_example(thy),
                                     "sort": thy._model._order,
                                     "limit": {
                                         "limit": thy._model.CHUNK,
@@ -670,7 +655,7 @@ class OpenApi(flask_restx.Swagger):
                             },
                             "filter through body paginate": {
                                 "value": {
-                                    "filter": self.relations_one_example(thy),
+                                    "filter": cls.relations_example(thy),
                                     "sort": thy._model._order,
                                     "limit": {
                                         "page": 1,
@@ -693,18 +678,19 @@ class OpenApi(flask_restx.Swagger):
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": f"#/components/schemas/Deleted"
+                                "$ref": "#/components/schemas/Deleted"
                             }
                         }
                     }
                 },
                 "400": {
-                    "description": f"unable to updeletedate due to bad request"
+                    "description": "unable to updeletedate due to bad request"
                 }
             }
         }
 
-    def relations_update_options(self, thy):
+    @classmethod
+    def relations_update_options(cls, thy):
         """
         Generates update options operation
         """
@@ -725,7 +711,7 @@ class OpenApi(flask_restx.Swagger):
                             },
                             "validate": {
                                 "value": {
-                                    thy.SINGULAR: self.relations_one_example(thy)
+                                    thy.SINGULAR: cls.relations_example(thy)
                                 }
                             }
                         }
@@ -749,7 +735,8 @@ class OpenApi(flask_restx.Swagger):
             }
         }
 
-    def relations_retrieve_one(self, thy):
+    @classmethod
+    def relations_retrieve_one(cls, thy):
         """
         Generates retrieve one operation
         """
@@ -769,7 +756,7 @@ class OpenApi(flask_restx.Swagger):
                             "examples": {
                                 "retrieve": {
                                     "value": {
-                                        thy.SINGULAR: self.relations_one_example(thy, readonly=True),
+                                        thy.SINGULAR: cls.relations_example(thy, readonly=True),
                                         "overflow": False,
                                         "formats": {}
                                     }
@@ -784,7 +771,8 @@ class OpenApi(flask_restx.Swagger):
             }
         }
 
-    def relations_update_one(self, thy):
+    @classmethod
+    def relations_update_one(cls, thy):
         """
         Generates update one operation
         """
@@ -802,7 +790,7 @@ class OpenApi(flask_restx.Swagger):
                         "examples": {
                             "update": {
                                 "value": {
-                                    thy.SINGULAR: self.relations_one_example(thy)
+                                    thy.SINGULAR: cls.relations_example(thy)
                                 }
                             }
                         }
@@ -815,13 +803,13 @@ class OpenApi(flask_restx.Swagger):
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": f"#/components/schemas/Updated"
+                                "$ref": "#/components/schemas/Updated"
                             }
                         }
                     }
                 },
                 "400": {
-                    "description": f"unable to update due to bad request"
+                    "description": "unable to update due to bad request"
                 },
                 "404": {
                     "description": f"{thy.SINGULAR} not found"
@@ -829,7 +817,8 @@ class OpenApi(flask_restx.Swagger):
             }
         }
 
-    def relations_delete_one(self, thy):
+    @classmethod
+    def relations_delete_one(cls, thy):
         """
         Generates delete one operation
         """
@@ -844,7 +833,7 @@ class OpenApi(flask_restx.Swagger):
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": f"#/components/schemas/"
+                                "$ref": "#/components/schemas/"
                             }
                         }
                     }
@@ -855,7 +844,7 @@ class OpenApi(flask_restx.Swagger):
             }
         }
 
-    def relations_operations(self, specs, ns, urls, thy):
+    def relations_operations(self, specs, ns, urls, thy): # pylint: disable=too-many-branches
         """
         Generates operations for all methods
         """
@@ -1036,3 +1025,27 @@ class OpenApi(flask_restx.Swagger):
                     self.relations_resource(specs, ns, resource, urls)
 
         return specs
+
+
+class Api(flask_restx.Api):
+    """
+    Overrride Flask RestX API
+    """
+
+    @cached_property
+    def __schema__(self):
+        """
+        The Swagger specifications/schema for this API
+
+        :returns dict: the schema as a serializable dict
+        """
+        if not self._schema:
+            try:
+                self._schema = OpenApi(self).as_dict()
+            except Exception: # pragma: no cover
+                # Log the source exception for debugging purpose
+                # and return an error message
+                msg = "Unable to render schema"
+                flask_restx.api.log.exception(msg)  # This will provide a full traceback
+                return {"error": msg}
+        return self._schema
