@@ -5,7 +5,7 @@
             "name": "relations",
             "type": "python",
             "request": "attach",
-            "port": 5678,
+            "port": 18288,
             "host": "localhost",
             "pathMappings": [
                 {

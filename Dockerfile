@@ -10,5 +10,6 @@ RUN pip install -r requirements.txt
 
 COPY setup.py .
 COPY lib lib
+COPY bin bin
 
 ENV PYTHONPATH "/opt/service/lib:${PYTHONPATH}"

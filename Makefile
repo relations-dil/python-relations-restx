@@ -1,10 +1,12 @@
 ACCOUNT=gaf3
 IMAGE=relations-restx
 INSTALL=python:3.8.5-alpine3.12
-VERSION?=0.4.0
-DEBUG_PORT=5678
+VERSION?=0.5.0
+DEBUG_PORT=18288
+TILT_PORT=28288
 TTY=$(shell if tty -s; then echo "-it"; fi)
 VOLUMES=-v ${PWD}/lib:/opt/service/lib \
+		-v ${PWD}/bin:/opt/service/bin \
 		-v ${PWD}/test:/opt/service/test \
 		-v ${PWD}/.pylintrc:/opt/service/.pylintrc \
 		-v ${PWD}/setup.py:/opt/service/setup.py
@@ -36,7 +38,16 @@ setup:
 		git+https://github.com/relations-dil/python-relations.git@0.6.10#egg=python-relations \
 		git+https://github.com/gaf3/opengui.git@0.8.3#egg=opengui && \
 	python setup.py install && \
-	python -m relations_restx.resource"
+	python -m relations_restx.resource && \
+	python -m relations_restx.api"
+
+up:
+	kubectx docker-desktop
+	tilt --port $(TILT_PORT) up
+
+down:
+	kubectx docker-desktop
+	tilt down
 
 tag:
 	-git tag -a $(VERSION) -m "Version $(VERSION)"
