@@ -1,7 +1,7 @@
 ACCOUNT=gaf3
 IMAGE=relations-restx
 INSTALL=python:3.8.5-alpine3.12
-VERSION?=0.6.0
+VERSION?=0.6.1
 DEBUG_PORT=18288
 TILT_PORT=28288
 TTY=$(shell if tty -s; then echo "-it"; fi)

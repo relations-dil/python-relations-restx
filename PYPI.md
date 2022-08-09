@@ -1,4 +1,4 @@
-# python-relations-restx
+# relations-restx
 
 CRUD API from DB Modeling using the Flask-RESTX library
 

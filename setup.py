@@ -7,7 +7,7 @@ with open("README.md", "r") as readme_file:
 
 setup(
     name="relations-restx",
-    version="0.6.0",
+    version="0.6.1",
     package_dir = {'': 'lib'},
     py_modules = [
         'relations_restx',
