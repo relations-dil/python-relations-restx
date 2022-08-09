@@ -1,7 +1,7 @@
 opengui==0.8.8
 relations-dil==0.6.11
 Werkzeug==2.1.2
-flask==2.1.1
+flask==2.1.2
 flask-restx==0.5.1
 ptvsd==4.3.2
 coverage==5.2.1

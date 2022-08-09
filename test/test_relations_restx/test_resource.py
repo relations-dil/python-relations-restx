@@ -14,7 +14,7 @@ import relations_restx
 
 
 class ResourceModel(relations.Model):
-    SOURCE = "TestRestXResource"
+    SOURCE = "RestXResource"
 
 class Simple(ResourceModel):
     id = int
@@ -82,7 +82,7 @@ class TestRestX(relations.unittest.TestCase):
 
     def setUp(self):
 
-        self.source = relations.unittest.MockSource("TestRestXResource")
+        self.source = relations.unittest.MockSource("RestXResource")
 
         self.app = flask.Flask("resource-api")
         self.restx = relations_restx.Api(self.app)

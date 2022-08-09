@@ -16,8 +16,8 @@ setup(
     ],
     install_requires=[
         'Werkzeug==2.1.2',
-        'flask>=2.1.1',
-        'flask-rest>==0.5.1',
+        'flask==2.1.2',
+        'flask-restx==0.5.1',
         'opengui==0.8.8',
         'relations-dil==0.6.11'
     ],
