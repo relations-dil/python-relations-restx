@@ -1,6 +1,7 @@
-git+https://github.com/gaf3/opengui.git@0.8.3#egg=opengui
-git+https://github.com/relations-dil/python-relations.git@0.6.10#egg=python-relations
-flask==2.1.1
+opengui==0.8.8
+relations-dil==0.6.11
+Werkzeug==2.1.2
+flask==2.1.2
 flask-restx==0.5.1
 ptvsd==4.3.2
 coverage==5.2.1
