@@ -1,7 +1,7 @@
 ACCOUNT=gaf3
 IMAGE=relations-restx
 INSTALL=python:3.8.5-alpine3.12
-VERSION?=0.6.2
+VERSION?=$(shell cat VERSION)
 DEBUG_PORT=18288
 TILT_PORT=28288
 TTY=$(shell if tty -s; then echo "-it"; fi)
@@ -9,6 +9,7 @@ VOLUMES=-v ${PWD}/lib:/opt/service/lib \
 		-v ${PWD}/bin:/opt/service/bin \
 		-v ${PWD}/test:/opt/service/test \
 		-v ${PWD}/.pylintrc:/opt/service/.pylintrc \
+		-v ${PWD}/VERSION:/opt/service/VERSION \
 		-v ${PWD}/setup.py:/opt/service/setup.py
 ENVIRONMENT=-e PYTHONDONTWRITEBYTECODE=1 \
 			-e PYTHONUNBUFFERED=1 \
