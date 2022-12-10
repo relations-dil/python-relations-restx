@@ -1,13 +1,20 @@
 #!/usr/bin/env python
 
+import os
 from setuptools import setup
 
 with open("README.md", "r") as readme_file:
     long_description = readme_file.read()
 
+version = os.environ.get("BUILD_VERSION")
+
+if version is None:
+    with open("VERSION", "r") as version_file:
+        version = version_file.read().strip()
+
 setup(
     name="relations-restx",
-    version="0.6.1",
+    version=version,
     package_dir = {'': 'lib'},
     py_modules = [
         'relations_restx',
@@ -19,7 +26,7 @@ setup(
         'flask==2.1.2',
         'flask-restx==0.5.1',
         'opengui==0.8.8',
-        'relations-dil==0.6.11'
+        'relations-dil==0.6.12'
     ],
     url="https://github.com/relations-dil/python-relations-restx",
     author="Gaffer Fitch",
