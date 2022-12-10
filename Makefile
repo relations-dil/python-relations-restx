@@ -60,10 +60,10 @@ untag:
 
 testpypi:
 	docker run $(TTY) $(VOLUMES) $(PYPI) gaf3/pypi sh -c "cd /opt/service && \
-	python -m build && \
+	BUILD_VERSION='$(VERSION)' python -m build && \
 	python -m twine upload -r testpypi --config-file=.pypirc dist/*"
 
 pypi:
 	docker run $(TTY) $(VOLUMES) $(PYPI) gaf3/pypi sh -c "cd /opt/service && \
-	python -m build && \
+	BUILD_VERSION='$(VERSION)' python -m build && \
 	python -m twine upload --config-file=.pypirc dist/*"
