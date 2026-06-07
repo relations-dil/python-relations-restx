@@ -286,7 +286,7 @@ class Resource(flask_restx.Resource, ResourceIdentity):
                 value = field.value if field.value is not None else field.original
 
                 if (not like and value is not None and value not in titles):
-                    titles = relation.Parent.one(**{relation.parent_field: value}).titles()
+                    titles = relation.Parent.one(**{relation.parent_id: value}).titles()
                     field.content["overflow"] = True
 
                 field.options = titles.ids
@@ -308,7 +308,7 @@ class Resource(flask_restx.Resource, ResourceIdentity):
         for field in model._fields._order:
             relation = model._ancestor(field.name)
             if relation is not None:
-                titles = relation.Parent.many(**{f"{relation.parent_field}__in": model[field.name]}).titles()
+                titles = relation.Parent.many(**{f"{relation.parent_id}__in": model[field.name]}).titles()
                 formats[field.name] = {
                     "titles": titles.titles,
                     "format": titles.format
