@@ -66,6 +66,23 @@ class Net(ResourceModel):
     TITLES = "ip__address"
     INDEX = "ip__value"
 
+class Sis(ResourceModel):
+    id = int
+    name = str
+    bro_id = set
+
+class Bro(ResourceModel):
+    id = int
+    name = str
+    sis_id = set
+
+class SisBro(ResourceModel):
+    ID = None
+    bro_id = int
+    sis_id = int
+
+relations.ManyToMany(Sis, Bro, SisBro)
+
 class SimpleResource(relations_restx.Resource):
     MODEL = Simple
 
@@ -77,6 +94,12 @@ class MetaResource(relations_restx.Resource):
 
 class NetResource(relations_restx.Resource):
     MODEL = Net
+
+class SisResource(relations_restx.Resource):
+    MODEL = Sis
+
+class BroResource(relations_restx.Resource):
+    MODEL = Bro
 
 class TestRestX(relations.unittest.TestCase):
 
@@ -91,6 +114,8 @@ class TestRestX(relations.unittest.TestCase):
         self.restx.add_resource(PlainResource, *PlainResource.thy().endpoints())
         self.restx.add_resource(MetaResource, *MetaResource.thy().endpoints())
         self.restx.add_resource(NetResource, *NetResource.thy().endpoints())
+        self.restx.add_resource(SisResource, *SisResource.thy().endpoints())
+        self.restx.add_resource(BroResource, *BroResource.thy().endpoints())
 
         self.api = self.app.test_client()
 
@@ -899,6 +924,78 @@ class TestResource(TestRestX):
 
         response = self.api.post("/simple", json={"filter": {"name": "ya"}, "count": True})
         self.assertStatusModel(response, 200, "simples", 1)
+
+    def test_post_ties(self):
+
+        tom = Bro("Tom").create()
+        dick = Bro("Dick").create()
+
+        response = self.api.post("/sis", json={"sis": {"name": "Mary", "bro_id": [tom.id, dick.id]}})
+        self.assertStatusModel(response, 201, "sis", {"name": "Mary", "bro_id": sorted([tom.id, dick.id])})
+
+        mary = Sis.one(id=response.json["sis"]["id"])
+        self.assertEqual(mary.bro.id, [dick.id, tom.id])
+
+    def test_get_ties(self):
+
+        tom = Bro("Tom").create()
+        dick = Bro("Dick").create()
+        mary = Sis("Mary", bro_id=[tom.id, dick.id]).create()
+        Sis("Sue", bro_id=[tom.id]).create()
+
+        # retrieving one carries the ties back
+
+        response = self.api.get(f"/sis/{mary.id}")
+        self.assertStatusModel(response, 200, "sis", {"id": mary.id, "name": "Mary", "bro_id": sorted([tom.id, dick.id])})
+
+        # retrieving many filtered by tie membership
+
+        response = self.api.get("/sis", json={"filter": {"bro_id": [dick.id]}})
+        self.assertStatusModel(response, 200, "siss", [{"name": "Mary", "bro_id": sorted([tom.id, dick.id])}])
+
+    def test_patch_ties(self):
+
+        tom = Bro("Tom").create()
+        dick = Bro("Dick").create()
+        harry = Bro("Harry").create()
+        mary = Sis("Mary", bro_id=[tom.id, dick.id]).create()
+
+        response = self.api.patch(f"/sis/{mary.id}", json={"sis": {"bro_id": [dick.id, harry.id]}})
+        self.assertStatusModel(response, 202, "updated", 1)
+
+        self.assertEqual(sorted(Sis.one(mary.id).bro.id), sorted([dick.id, harry.id]))
+
+    def test_delete_ties(self):
+
+        tom = Bro("Tom").create()
+        mary = Sis("Mary", bro_id=[tom.id]).create()
+
+        self.assertEqual(len(SisBro.many()), 1)
+
+        response = self.api.delete(f"/sis/{mary.id}")
+        self.assertStatusModel(response, 202, "deleted", 1)
+
+        self.assertEqual(len(Sis.many()), 0)
+        self.assertEqual(len(SisBro.many()), 0)
+
+    def test_get_ties_query(self):
+
+        tom = Bro("Tom").create()
+        dick = Bro("Dick").create()
+        harry = Bro("Harry").create()
+
+        Sis("Mary", bro_id=[tom.id, dick.id]).create()
+        Sis("Sue", bro_id=[tom.id]).create()
+        Sis("Ann", bro_id=[dick.id, harry.id]).create()
+
+        def names(filter):
+            return sorted(sis["name"] for sis in self.api.get("/sis", json={"filter": filter}).json["siss"])
+
+        self.assertEqual(names({"bro_id__has": tom.id}), ["Mary", "Sue"])
+        self.assertEqual(names({"bro_id__any": [tom.id, harry.id]}), ["Ann", "Mary", "Sue"])
+        self.assertEqual(names({"bro_id__all": [tom.id, dick.id]}), ["Mary"])
+        self.assertEqual(names({"bro_id__not_has": tom.id}), ["Ann"])
+        self.assertEqual(names({"bro_id__not_any": [harry.id]}), ["Mary", "Sue"])
 
     def test_get(self):
 

@@ -25,8 +25,11 @@ setup(
         'Werkzeug==2.1.2',
         'flask==2.1.2',
         'flask-restx==0.5.1',
+        'jsonschema==4.17.3',
+        'MarkupSafe==2.1.5',
+        'click==8.1.8',
         'opengui==0.8.8',
-        'relations-dil==0.6.12'
+        'relations-dil==0.6.14'
     ],
     url="https://github.com/relations-dil/python-relations-restx",
     author="Gaffer Fitch",
