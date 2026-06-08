@@ -29,7 +29,7 @@ setup(
         'MarkupSafe==2.1.5',
         'click==8.1.8',
         'opengui==0.8.8',
-        'relations-dil==0.6.14'
+        'relations-dil==0.6.15'
     ],
     url="https://github.com/relations-dil/python-relations-restx",
     author="Gaffer Fitch",
