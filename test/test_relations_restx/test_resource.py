@@ -997,6 +997,35 @@ class TestResource(TestRestX):
         self.assertEqual(names({"bro_id__not_has": tom.id}), ["Ann"])
         self.assertEqual(names({"bro_id__not_any": [harry.id]}), ["Mary", "Sue"])
 
+    def test_get_ties_attr(self):
+
+        tom = Bro("Tom").create()
+        dick = Bro("Dick").create()
+        harry = Bro("Harry").create()
+
+        Sis("Mary", bro_id=[tom.id, dick.id]).create()
+        Sis("Sue", bro_id=[tom.id]).create()
+        Sis("Ann", bro_id=[dick.id, harry.id]).create()
+
+        def names(filter):
+            return sorted(sis["name"] for sis in self.api.get("/sis", json={"filter": filter}).json["siss"])
+
+        # sibling-attribute filters ride through the API to many(); existence semantics
+        self.assertEqual(names({"bro__name": "Tom"}), ["Mary", "Sue"])
+        self.assertEqual(names({"bro__name__in": ["Tom", "Dick"]}), ["Ann", "Mary", "Sue"])
+        self.assertEqual(names({"bro__name__like": "arr"}), ["Ann"])
+        self.assertEqual(names({"bro__name__not_in": ["Tom"]}), ["Ann", "Mary"])
+        # criteria on the same relation filter the same tied brother
+        self.assertEqual(names({"bro__name": "Dick", "bro__id": dick.id}), ["Ann", "Mary"])
+
+        # symmetric: brothers by a tied sister's name
+        jane = Sis("Jane").create()
+        joan = Sis("Joan").create()
+        Bro("Bab", sis_id=[jane.id, joan.id]).create()
+        Bro("Bil", sis_id=[jane.id]).create()
+        bros = sorted(bro["name"] for bro in self.api.get("/bro", json={"filter": {"sis__name": "Jane"}}).json["bros"])
+        self.assertEqual(bros, ["Bab", "Bil"])
+
     def test_get(self):
 
         simple = Simple("ya").create()
