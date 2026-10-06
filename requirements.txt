@@ -1,5 +1,5 @@
 opengui==0.8.8
-relations-dil==0.6.15
+relations-dil @ git+https://github.com/relations-dil/python-relations.git@97dc040e34721f210c140f1dc0677df851aa690e
 Werkzeug==2.1.2
 flask==2.1.2
 flask-restx==0.5.1
