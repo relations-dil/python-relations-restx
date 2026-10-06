@@ -83,6 +83,17 @@ class SisBro(ResourceModel):
 
 relations.ManyToMany(Sis, Bro, SisBro)
 
+class Owner(ResourceModel):
+    id = int
+    name = str
+
+class Pet(ResourceModel):
+    id = int
+    name = str
+    what = dict
+
+relations.OneToMany(Owner, Pet, child_inject="what")
+
 class SimpleResource(relations_restx.Resource):
     MODEL = Simple
 
@@ -101,6 +112,12 @@ class SisResource(relations_restx.Resource):
 class BroResource(relations_restx.Resource):
     MODEL = Bro
 
+class OwnerResource(relations_restx.Resource):
+    MODEL = Owner
+
+class PetResource(relations_restx.Resource):
+    MODEL = Pet
+
 class TestRestX(relations.unittest.TestCase):
 
     def setUp(self):
@@ -116,6 +133,8 @@ class TestRestX(relations.unittest.TestCase):
         self.restx.add_resource(NetResource, *NetResource.thy().endpoints())
         self.restx.add_resource(SisResource, *SisResource.thy().endpoints())
         self.restx.add_resource(BroResource, *BroResource.thy().endpoints())
+        self.restx.add_resource(OwnerResource, *OwnerResource.thy().endpoints())
+        self.restx.add_resource(PetResource, *PetResource.thy().endpoints())
 
         self.api = self.app.test_client()
 
@@ -364,6 +383,31 @@ class TestResourceIdentity(TestRestX):
 
         InitResource.LIST = ["nope"]
         self.assertRaisesRegex(relations_restx.ResourceError, "cannot find field nope from list", InitResource.thy)
+
+        # an injected parent key is a form field that carries its inject, and it's optional
+
+        self.assertEqual(PetResource.thy()._fields, [
+            {
+                "name": "id",
+                "kind": "int",
+                "readonly": True
+            },
+            {
+                "name": "name",
+                "kind": "str",
+                "required": True
+            },
+            {
+                "name": "what",
+                "kind": "dict",
+                "default": {}
+            },
+            {
+                "name": "owner_id",
+                "kind": "int",
+                "inject": "what__relations__owner__id"
+            }
+        ])
 
     def test_endpoints(self):
 
@@ -685,6 +729,48 @@ class TestResource(TestRestX):
             }
         ])
 
+        # an injected parent key gets its parent picker, optional with nothing selected
+
+        Owner("pat").create()
+        Owner("sam").create()
+
+        self.assertEqual(PetResource().fields(
+            likes={},
+            values={}
+        ).to_list()[-1], {
+            "name": "owner_id",
+            "kind": "int",
+            "inject": "what__relations__owner__id",
+            "options": [1, 2],
+            "titles": {
+                1: ["pat"],
+                2: ["sam"]
+            },
+            "format": [None],
+            "overflow": False
+        })
+
+        self.assertEqual(PetResource().fields(
+            likes={
+                "owner_id": "p"
+            },
+            values={
+                "owner_id": 1
+            }
+        ).to_list()[-1], {
+            "name": "owner_id",
+            "kind": "int",
+            "inject": "what__relations__owner__id",
+            "options": [1],
+            "titles": {
+                1: ["pat"]
+            },
+            "like": "p",
+            "format": [None],
+            "overflow": False,
+            "value": 1
+        })
+
     def test_formats(self):
 
         Simple("ya").create().plain.add("sure").create()
@@ -736,6 +822,26 @@ class TestResource(TestRestX):
             },
             "created": {
                 "format": ["datetime"]
+            }
+        })
+
+        # an injected parent key is formatted from its parent, and a child with no parent has no titles
+
+        Owner("pat").create().pet.add("rex").create()
+
+        Pet(name="stray").create()
+
+        self.assertEqual(PetResource().formats(Pet.many()), {
+            "owner_id": {
+                "titles": {1: ["pat"]},
+                "format": [None]
+            }
+        })
+
+        self.assertEqual(PetResource().formats(Pet.many(name="stray")), {
+            "owner_id": {
+                "titles": {},
+                "format": [None]
             }
         })
 
@@ -925,6 +1031,21 @@ class TestResource(TestRestX):
         response = self.api.post("/simple", json={"filter": {"name": "ya"}, "count": True})
         self.assertStatusModel(response, 200, "simples", 1)
 
+        # an injected parent key posts with or without a parent
+
+        Owner("pat").create()
+
+        response = self.api.post("/pet", json={"pet": {"name": "rex", "owner_id": 1}})
+        self.assertStatusModel(response, 201, "pet", {"name": "rex", "owner_id": 1})
+        self.assertEqual(Pet.one(name="rex").owner_id, 1)
+
+        response = self.api.post("/pet", json={"pet": {"name": "stray"}})
+        self.assertStatusModel(response, 201, "pet", {"name": "stray", "owner_id": None})
+        self.assertIsNone(Pet.one(name="stray").owner_id)
+
+        response = self.api.post("/pet", json={"filter": {"owner_id": 1}})
+        self.assertStatusModel(response, 200, "pets", [{"name": "rex", "owner_id": 1}])
+
     def test_post_ties(self):
 
         tom = Bro("Tom").create()
@@ -1081,6 +1202,27 @@ class TestResource(TestRestX):
         self.assertEqual(self.api.get("/simple?count=yes").json["simples"], 6)
         self.assertEqual(self.api.get("/simple", json={"count": True}).json["simples"], 6)
 
+        # an injected parent key lists, filters and formats
+
+        pat = Owner("pat").create()
+        pat.pet.add("rex").create()
+        Pet(name="stray").create()
+
+        response = self.api.get("/pet")
+        self.assertStatusModels(response, 200, "pets", [{"name": "rex", "owner_id": pat.id}, {"name": "stray", "owner_id": None}])
+        self.assertStatusValue(response, 200, "formats", {
+            "owner_id": {
+                "titles": {"1": ["pat"]},
+                "format": [None]
+            }
+        })
+
+        response = self.api.get("/pet", json={"filter": {"owner_id": pat.id}})
+        self.assertStatusModels(response, 200, "pets", [{"name": "rex", "owner_id": pat.id}])
+
+        response = self.api.get(f"/pet/{Pet.one(name='stray').id}")
+        self.assertStatusModel(response, 200, "pet", {"name": "stray", "owner_id": None})
+
     def test_patch(self):
 
         response = self.api.patch("/simple")
@@ -1102,6 +1244,28 @@ class TestResource(TestRestX):
         response = self.api.patch("/simple", json={"filter": {"name": "no"}, "simples": {}})
         self.assertStatusModel(response, 202, "updated", 0)
 
+        # an injected parent key can be changed and cleared, but not in mass
+
+        pat = Owner("pat").create()
+        sam = Owner("sam").create()
+        rex = Pet(name="rex", owner_id=pat.id).create()
+
+        response = self.api.patch(f"/pet/{rex.id}", json={"pet": {"owner_id": sam.id}})
+        self.assertStatusModel(response, 202, "updated", 1)
+        self.assertEqual(Pet.one(name="rex").owner_id, sam.id)
+
+        response = self.api.patch(f"/pet/{rex.id}", json={"pet": {"owner_id": None}})
+        self.assertStatusModel(response, 202, "updated", 1)
+        self.assertIsNone(Pet.one(name="rex").owner_id)
+
+        response = self.api.patch("/pet", json={"filter": {"name": "rex"}, "pet": {"owner_id": pat.id}})
+        self.assertStatusModel(response, 202, "updated", 1)
+        self.assertEqual(Pet.one(name="rex").owner_id, pat.id)
+
+        response = self.api.patch("/pet", json={"filter": {"name": "rex"}, "pets": {"owner_id": sam.id}})
+        self.assertStatusValue(response, 500, "message", "no mass update with inject")
+        self.assertEqual(Pet.one(name="rex").owner_id, pat.id)
+
     def test_delete(self):
 
         response = self.api.delete(f"/simple")
@@ -1117,3 +1281,13 @@ class TestResource(TestRestX):
 
         response = self.api.delete("/simple", json={"filter": {"name": "no"}})
         self.assertStatusModel(response, 202, "deleted", 0)
+
+        # an injected parent key can be used to delete
+
+        pat = Owner("pat").create()
+        Pet(name="rex", owner_id=pat.id).create()
+        Pet(name="stray").create()
+
+        response = self.api.delete("/pet", json={"filter": {"owner_id": pat.id}})
+        self.assertStatusModel(response, 202, "deleted", 1)
+        self.assertEqual(Pet.many().name, ["stray"])
