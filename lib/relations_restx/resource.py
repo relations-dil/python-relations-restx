@@ -35,12 +35,17 @@ def exceptions(endpoint):
 
         except relations.ModelError as exception:
 
-            message = str(exception)
+            # What happened decides the status, by what was raised, not by what it says
 
-            status_code = 404 if "none retrieved" in message else 500
+            status_code = 500
+
+            if isinstance(exception, relations.NotFoundError):
+                status_code = 404
+            elif isinstance(exception, relations.UniqueError):
+                status_code = 409
 
             response = {
-                "message": message,
+                "message": str(exception),
             }, status_code
 
         except Exception as exception:
@@ -54,7 +59,7 @@ def exceptions(endpoint):
 
     return wrap
 
-class ResourceError(Exception):
+class ResourceError(relations.RelationsError):
     """
     Generic resource Error for easier tracing
     """

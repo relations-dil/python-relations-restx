@@ -182,11 +182,39 @@ class TestExceptions(TestRestX):
 
         @relations_restx.exceptions
         def missing():
-            raise relations.ModelError(Simple(), "none retrieved")
+            raise relations.NotFoundError(Simple(), "none retrieved")
 
         self.app.add_url_rule('/missing', 'missing', missing)
 
         self.assertStatusValue(self.api.get("/missing"), 404, "message", "simple: none retrieved")
+
+        # a missing record is a 404 by its type, whatever it says, and plain text doesn't make one
+
+        @relations_restx.exceptions
+        def gone():
+            raise relations.NotFoundError(Simple(), "it is gone")
+
+        self.app.add_url_rule('/gone', 'gone', gone)
+
+        self.assertStatusValue(self.api.get("/gone"), 404, "message", "simple: it is gone")
+
+        @relations_restx.exceptions
+        def worded():
+            raise relations.ModelError(Simple(), "none retrieved")
+
+        self.app.add_url_rule('/worded', 'worded', worded)
+
+        self.assertStatusValue(self.api.get("/worded"), 500, "message", "simple: none retrieved")
+
+        # a duplicate is a 409
+
+        @relations_restx.exceptions
+        def duplicate():
+            raise relations.UniqueError(Simple(), "value violates unique name")
+
+        self.app.add_url_rule('/duplicate', 'duplicate', duplicate)
+
+        self.assertStatusValue(self.api.get("/duplicate"), 409, "message", "simple: value violates unique name")
 
         @relations_restx.exceptions
         def broken():
@@ -211,6 +239,8 @@ class TestResourceError(unittest.TestCase):
     def test___init__(self):
 
         error = relations_restx.ResourceError("unittest", "oops")
+
+        self.assertIsInstance(error, relations.RelationsError)
 
         self.assertEqual(error.resource, "unittest")
         self.assertEqual(error.message, "oops")

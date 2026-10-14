@@ -18,6 +18,12 @@ Shipping as 0.6.5, with relations-dil 0.6.16.
 ### Added
 - Tests for a parent key stored in a dict field (`child_inject` in relations-dil 0.6.16): it comes through as an optional form field that carries its `inject`, gets its parent picker, formats with no titles when there's no parent, and posts, lists, filters, patches, clears and deletes like any other key. A mass patch through it is refused.
 
+## [0.6.7] - 2026-10-14
+
+### Changed
+- `exceptions` picks the status by what was raised, not by what it says: a `relations.NotFoundError` is a 404 and a `relations.UniqueError` is a 409, any other `ModelError` a 500. A plain `ModelError` that only says "none retrieved" used to be a 404 and is now a 500, every source raises `NotFoundError` for it now.
+- `ResourceError` is a `relations.RelationsError`. Needs relations-dil 0.6.19 (relations-dil/python-relations#78).
+
 ## [0.6.6] - 2026-10-14
 
 ### Changed
