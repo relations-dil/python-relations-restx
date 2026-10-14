@@ -18,6 +18,12 @@ Shipping as 0.6.5, with relations-dil 0.6.16.
 ### Added
 - Tests for a parent key stored in a dict field (`child_inject` in relations-dil 0.6.16): it comes through as an optional form field that carries its `inject`, gets its parent picker, formats with no titles when there's no parent, and posts, lists, filters, patches, clears and deletes like any other key. A mass patch through it is refused.
 
+## [0.6.6] - 2026-10-14
+
+### Changed
+- The form for updating a record (`OPTIONS` with an id) marks a readonly field readonly, so a string id (relations-dil 0.6.18, supplied by the caller) shows as fixed on update instead of editable. A PATCH that changed it was already ignored. The form for creating one is unchanged, the id is required there.
+- Needs relations-dil 0.6.18.
+
 ## [0.6.4] - 2026-06-08
 
 - Bumped the `relations-dil` requirement to 0.6.15 and installed git in the Dockerfile; tests were extended to cover searching ties through attributes.
