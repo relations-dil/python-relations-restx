@@ -274,6 +274,12 @@ class Resource(flask_restx.Resource, ResourceIdentity):
         fields = opengui.Fields(values=values, originals=originals, fields=self._fields)
 
         for field in fields:
+
+            # An update can't change a readonly field (a string id), though a create has to supply it
+
+            if originals is not None and self._model._fields._names[field.name].readonly:
+                field.readonly = True
+
             relation = self._model._ancestor(field.name)
             if relation is not None:
                 like = {"like": likes[name] for name in likes if name == field.name}

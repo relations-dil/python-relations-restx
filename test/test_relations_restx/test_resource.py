@@ -21,6 +21,10 @@ class Simple(ResourceModel):
     name = str
     CHUNK = 2
 
+class Slug(ResourceModel):
+    id = str
+    name = str
+
 class Plain(ResourceModel):
     ID = None
     simple_id = int
@@ -93,6 +97,9 @@ class Pet(ResourceModel):
     what = dict
 
 relations.OneToMany(Owner, Pet, child_inject="what")
+
+class SlugResource(relations_restx.Resource):
+    MODEL = Slug
 
 class SimpleResource(relations_restx.Resource):
     MODEL = Simple
@@ -555,6 +562,45 @@ class TestResource(TestRestX):
         self.assertStatusValue(response, 200, "count", False)
 
     def test_fields(self):
+
+        # a string id is given by the caller to create, and can't be changed by an update
+
+        self.assertEqual(SlugResource().fields(
+            likes={},
+            values={}
+        ).to_list(), [
+            {
+                "name": "id",
+                "kind": "str",
+                "required": True
+            },
+            {
+                "name": "name",
+                "kind": "str"
+            }
+        ])
+
+        self.assertEqual(SlugResource().fields(
+            likes={},
+            values={},
+            originals={
+                "id": "abc.slug.main.unum",
+                "name": "sure"
+            }
+        ).to_list(), [
+            {
+                "name": "id",
+                "kind": "str",
+                "required": True,
+                "readonly": True,
+                "original": "abc.slug.main.unum"
+            },
+            {
+                "name": "name",
+                "kind": "str",
+                "original": "sure"
+            }
+        ])
 
         self.assertEqual(SimpleResource().fields(
             likes={},
