@@ -98,6 +98,17 @@ class Pet(ResourceModel):
 
 relations.OneToMany(Owner, Pet, child_inject="what")
 
+class Place(ResourceModel):
+    id = str
+    name = str
+
+class Thing(ResourceModel):
+    id = int
+    name = str
+    what = dict
+
+relations.OneToMany(Place, Thing, child_inject="what")
+
 class SlugResource(relations_restx.Resource):
     MODEL = Slug
 
@@ -124,6 +135,9 @@ class OwnerResource(relations_restx.Resource):
 
 class PetResource(relations_restx.Resource):
     MODEL = Pet
+
+class ThingResource(relations_restx.Resource):
+    MODEL = Thing
 
 class TestRestX(relations.unittest.TestCase):
 
@@ -916,6 +930,26 @@ class TestResource(TestRestX):
 
         self.assertEqual(PetResource().formats(Pet.many(name="stray")), {
             "owner_id": {
+                "titles": {},
+                "format": [None]
+            }
+        })
+
+        # a parent with a str id, and one record with no parent, has no titles and doesn't fail
+
+        Place(id="home", name="Home").create().thing.add("lamp").create()
+
+        Thing(name="loose").create()
+
+        self.assertEqual(ThingResource().formats(Thing.one(name="lamp")), {
+            "place_id": {
+                "titles": {"home": ["home"]},
+                "format": [None]
+            }
+        })
+
+        self.assertEqual(ThingResource().formats(Thing.one(name="loose")), {
+            "place_id": {
                 "titles": {},
                 "format": [None]
             }
