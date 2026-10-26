@@ -3,8 +3,6 @@
 All notable changes to python-relations-restx are recorded here, newest first. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [SemVer](https://semver.org/).
 
-## [Unreleased]
-
 ## [0.6.8] - 2026-10-26
 
 ### Added
@@ -22,9 +20,6 @@ Shipping as 0.6.5, with relations-dil 0.6.16.
 
 ### Added
 - Tests for a parent key stored in a dict field (`child_inject` in relations-dil 0.6.16): it comes through as an optional form field that carries its `inject`, gets its parent picker, formats with no titles when there's no parent, and posts, lists, filters, patches, clears and deletes like any other key. A mass patch through it is refused.
-
-### Fixed
-- A record whose optional parent key is `None`, such as a parent injected into a dict field, no longer fails with `None not allowed for id` when it's fetched: `formats` looks up no titles for it (relations-dil/python-relations-restx#19).
 
 ## [0.6.7] - 2026-10-14
 
