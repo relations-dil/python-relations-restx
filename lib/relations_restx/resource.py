@@ -319,7 +319,8 @@ class Resource(flask_restx.Resource, ResourceIdentity):
         for field in model._fields._order:
             relation = model._ancestor(field.name)
             if relation is not None:
-                titles = relation.Parent.many(**{f"{relation.parent_id}__in": model[field.name]}).titles()
+                value = model[field.name]
+                titles = relation.Parent.many(**{f"{relation.parent_id}__in": [] if value is None else value}).titles()
                 formats[field.name] = {
                     "titles": titles.titles,
                     "format": titles.format
